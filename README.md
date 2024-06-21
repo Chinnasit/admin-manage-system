@@ -2,17 +2,20 @@
 
 ## Frontend
 The frontend of this project is based on the tutorial from this video: [User Management UI with React JS & Material UI | React Context API for State Management](https://www.youtube.com/watch?v=KTRFoouGzvY).
+- **JavaScript**
+- **React**
+- **MUI & MUI X Data Grid**
 
 ## Backend
-The backend is built from scratch using the following technologies:
-- **Go**: A statically typed, compiled programming language for building fast and efficient applications.
-- **Fiber**: An Express-inspired web framework built on top of Fasthttp, a high-performance HTTP engine for Go.
-- **GORM**: An Object-Relational Mapping (ORM) library for Go, designed to work with relational databases.
-- **MySQL**: A popular open-source relational database management system.
+The backend project struct of this project reference from this video:
+[Hexagonal & Clean Architecture | GoAPI Essential EP. 7](https://www.youtube.com/watch?v=4y_JXPwDuaA)
+- **Go**
+- **Fiber**
+- **GORM**
+- **PostgresSQL**
 
 ## Database
-For this project, I'm using Docker to run a MySQL database instance and connecting to it using the DBeaver client. 
-You can use any database server of your choice and configure the connection details accordingly.
+For this project, I'm using Docker Compose to run a PostgresSQL and pgAdmin4
 
 ## Features
 - User registration
@@ -43,6 +46,7 @@ Use any database server of your choice and configure the connection details acco
 3. Start the Backend Server:
 ```bash
 cd backend
+docker-compose up -d
 go run main.go
 ```
 3. Start the Frontend Server on a different port:
@@ -52,5 +56,5 @@ npm run dev
 ```
 
 ## Summary
-This project is a practical exercise in building a CRUD (Create, Read, Update, Delete) application using React.js, Material-UI (MUI) for the frontend, and Go, Fiber, GORM, and MySQL for the backend.
+This project is a practical exercise in building a CRUD (Create, Read, Update, Delete) application using React, Material-UI (MUI) for the frontend, and Go, Fiber, GORM, and PostgresSQL for the backend.
 The primary goal of this project is to develop a user management system that allows administrators to manage user accounts, including approving new users, editing user roles, and viewing user information.
