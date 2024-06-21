@@ -1,259 +1,101 @@
 package main
 
 import (
+	"Chinnasit/adapters"
+	"Chinnasit/entities"
+	"Chinnasit/usecases"
 	"context"
 	"fmt"
-	"strconv"
+	"log"
+	"os"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2"
+	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-type Users struct {
-	gorm.Model
-	ID        uint   `gorm:"primaryKey"`
-	FirstName string `gorm:"not null" `
-	LastName  string `gorm:"not null" `
-	Email     string `gorm:"unique;not null`
-	Password  string `gorm:"not null" `
-	RoleId    uint   `gorm:"not null" `
-	Active    bool   `gorm:"not null;default:false"`
+func main() {
+	db := initDatabase()
+	app := fiber.New()
+	app.Use(cors.New())
+
+	userRepo := adapters.NewGormUserRepository(db)
+	userUsecase := usecases.NewUserService(userRepo)
+	userHandler := adapters.NewHttpUserHandler(userUsecase)
+
+	app.Post("/user", userHandler.CreateUser)
+	app.Get("/users", userHandler.GetUsers)
+	app.Put("/users/:id", userHandler.UpdateUserFull)
+	app.Patch("/users/:id", userHandler.UpdateUserPartial)
+	app.Delete("/users/:id", userHandler.DeleteUser)
+
+	app.Listen(":3000")
 }
 
+// Trace SQL command
 type SqlLogger struct {
 	logger.Interface
 }
 
-// Trace SQL command
 func (l SqlLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
 	sql, _ := fc()
 	fmt.Printf("%v\n----------------\n", sql)
 }
 
-var db *gorm.DB
-var err error
-
-func main() {
-	// dsn should be env
-	// dsn = "<username>:<password>@tcp(<url>:3306)/<dbname>?parseTime=true"
-	dsn := "root:P@ssw0rd@tcp(127.0.0.1:3306)/admin_manage_system?parseTime=true"
-	dial := mysql.Open(dsn)
-	db, err = gorm.Open(dial, &gorm.Config{Logger: &SqlLogger{}})
+// Initial the database
+func initDatabase() *gorm.DB {
+	err := godotenv.Load()
 	if err != nil {
-		panic(err)
-	}
-	db.AutoMigrate(Users{})
-
-	// Run this function for the first time to initial users' data.
-	// CreateSampleUsers()
-
-	app := fiber.New()
-	app.Use(cors.New())
-	app.Post("/user", createUser)
-	app.Get("/users", getUsers)
-	app.Put("/users/:id", updateUserFull)
-	app.Patch("/users/:id", updateUserPartial)
-	app.Delete("/users/:id", deleteUser)
-
-	app.Listen(":3000")
-}
-
-type UsersResponse struct {
-	ID        uint      `json:"id"`
-	Email     string    `json:"email"`
-	FullName  string    `json:"fullName"`
-	RoleId    uint      `json:"roleId"`
-	CreatedAt time.Time `json:"createdAt"`
-	Active    bool      `json:"active"`
-}
-
-func getUsers(c *fiber.Ctx) error {
-	var users []Users
-	db.Find(&users)
-
-	var usersList []UsersResponse
-	for _, user := range users {
-		userResponse := UsersResponse{
-			ID:        user.ID,
-			FullName:  user.FirstName + " " + user.LastName,
-			Email:     user.Email,
-			CreatedAt: user.CreatedAt,
-			RoleId:    user.RoleId,
-			Active:    user.Active,
-		}
-		usersList = append(usersList, userResponse)
+		log.Fatalf("Error loading .env file: %v", err)
 	}
 
-	return c.Status(fiber.StatusOK).JSON(usersList)
-}
+	host := os.Getenv("DB_HOST")
+	user := os.Getenv("DB_USER")
+	password := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+	port := os.Getenv("DB_PORT")
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable", host, user, password, dbName, port)
 
-func createUser(c *fiber.Ctx) error {
-	user := new(Users)
-	fmt.Println(string(c.Body()))
-	if err := c.BodyParser(&user); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"msg": err.Error(),
-		})
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: &SqlLogger{}})
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"msg": err,
-		})
-	}
-	user.Password = string(hashedPassword)
-
-	result := db.Create(user)
-	if result.Error != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"msg": result.Error,
-		})
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(user)
+	db.AutoMigrate(entities.User{})
+	var count int64
+	db.Model(&entities.User{}).Count(&count)
+	if count == 0 {
+		CreateSampleUsers(db)
+	}
+
+	return db
 }
 
-func updateUserFull(c *fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"msg": err.Error(),
-		})
-	}
-
-	var user Users
-	result := db.First(&user, id)
-	if result.Error != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"msg": "User not found",
-		})
-	}
-
-	if err := c.BodyParser(&user); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"msg": err.Error(),
-		})
-	}
-
-	result = db.Save(&user)
-	if result.Error != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"msg": result.Error,
-		})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(user)
+func StringPtr(s string) *string {
+    return &s
 }
 
-type UpdateUserPartialRequest struct {
-	Email  *string `json:"email,omitempty"`
-	RoleId *uint   `json:"roleId,omitempty"`
-	Active *bool   `json:"active,omitempty"`
+func UintPtr(i uint) *uint {
+    return &i
 }
 
-func updateUserPartial(c *fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"msg": err.Error(),
-		})
-	}
-
-	var user Users
-	result := db.First(&user, id)
-	if result.Error != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"msg": "User not found",
-		})
-	}
-
-	var updateData UpdateUserPartialRequest
-	if err := c.BodyParser(&updateData); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"msg": err.Error(),
-		})
-	}
-
-	fmt.Println("updateData ->", updateData)
-
-	// Update fields based on request data
-	updates := make(map[string]interface{})
-	if updateData.Email != nil {
-		updates["email"] = *updateData.Email
-	}
-	if updateData.RoleId != nil {
-		updates["role_id"] = *updateData.RoleId
-	}
-	if updateData.Active != nil {
-		updates["active"] = *updateData.Active
-	}
-
-	result = db.Model(&user).Updates(updates)
-	if result.Error != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"msg": result.Error,
-		})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(user)
-
-}
-
-func deleteUser(c *fiber.Ctx) error {
-	id, err := strconv.Atoi(c.Params("id"))
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"msg": err.Error(),
-		})
-	}
-
-	var user Users
-	result := db.First(&user, id)
-	if result.Error != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"msg": "User not found",
-		})
-	}
-
-	result = db.Delete(&user)
-	if result.Error != nil {
-		c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"msg": result.Error,
-		})
-	}
-
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"msg": "the user was deleted successfully"})
-}
-
-func CreateSampleUsers() {
-	users := []Users{
-		{FirstName: "John", LastName: "Doe", Email: "john.doe@example.com", Password: "abcd12345", RoleId: 1, Active: true},
-		{FirstName: "Jane", LastName: "Doe", Email: "jane.doe@example.com", Password: "abcd12345", RoleId: 2, Active: true},
-		{FirstName: "Bob", LastName: "Smith", Email: "bob.smith@example.com", Password: "abcd12345", RoleId: 3, Active: false},
-		{FirstName: "Alice", LastName: "Johnson", Email: "alice.johnson@example.com", Password: "abcd12345", RoleId: 1, Active: true},
-		{FirstName: "Tom", LastName: "Williams", Email: "tom.williams@example.com", Password: "abcd12345", RoleId: 2, Active: false},
-		{FirstName: "Sarah", LastName: "Davis", Email: "sarah.davis@example.com", Password: "abcd12345", RoleId: 3, Active: true},
-		{FirstName: "Michael", LastName: "Brown", Email: "michael.brown@example.com", Password: "abcd12345", RoleId: 1, Active: false},
-		{FirstName: "Emily", LastName: "Wilson", Email: "emily.wilson@example.com", Password: "abcd12345", RoleId: 2, Active: true},
-		{FirstName: "David", LastName: "Anderson", Email: "david.anderson@example.com", Password: "abcd12345", RoleId: 3, Active: false},
-		{FirstName: "Jessica", LastName: "Thomas", Email: "jessica.thomas@example.com", Password: "abcd12345", RoleId: 1, Active: true},
-		{FirstName: "Matthew", LastName: "Jackson", Email: "matthew.jackson@example.com", Password: "abcd12345", RoleId: 2, Active: true},
-		{FirstName: "Ashley", LastName: "White", Email: "ashley.white@example.com", Password: "abcd12345", RoleId: 3, Active: false},
-		{FirstName: "Daniel", LastName: "Harris", Email: "daniel.harris@example.com", Password: "abcd12345", RoleId: 1, Active: true},
-		{FirstName: "Samantha", LastName: "Martin", Email: "samantha.martin@example.com", Password: "abcd12345", RoleId: 2, Active: true},
-		{FirstName: "Christopher", LastName: "Thompson", Email: "christopher.thompson@example.com", Password: "abcd12345", RoleId: 3, Active: true},
+func CreateSampleUsers(db *gorm.DB) {
+	users := []entities.User{
+		{FirstName: StringPtr("John"), LastName: StringPtr("Doe"), Email: StringPtr("john.doe@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(1), Active: true},
+        {FirstName: StringPtr("Jane"), LastName: StringPtr("Doe"), Email: StringPtr("jane.doe@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(2), Active: true},
+        {FirstName: StringPtr("Bob"), LastName: StringPtr("Smith"), Email: StringPtr("bob.smith@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(3), Active: false},
+        {FirstName: StringPtr("Alice"), LastName: StringPtr("Johnson"), Email: StringPtr("alice.johnson@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(1), Active: true},
+        {FirstName: StringPtr("Tom"), LastName: StringPtr("Williams"), Email: StringPtr("tom.williams@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(2), Active: false},
 	}
 
 	for _, user := range users {
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
-		user.Password = string(hashedPassword)
-
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(*user.Password), bcrypt.DefaultCost)
+		user.Password = StringPtr(string(hashedPassword))
 		result := db.Create(&user)
 		if result.Error != nil {
 			panic(result.Error)
