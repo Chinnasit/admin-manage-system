@@ -11,7 +11,7 @@ services:
       - POSTGRES_USER=root
       - POSTGRES_DB=mydatabase
     volumes:
-      - postgresql-data:/var/lib/postgresql/data
+      - admin-manage-system-postgresql-data:/var/lib/postgresql/data
 
   pgadmin:
     container_name: pgadmin
@@ -25,8 +25,8 @@ services:
       - PGADMIN_DEFAULT_PASSWORD=1234
     
     volumes:
-      - pgadmin-data:/var/lib/pgadmin
+      - admin-manage-system-pgadmin-data:/var/lib/pgadmin
 
 volumes:
-  postgresql-data:
-  pgadmin-data:
+  admin-manage-system-postgresql-data:
+  admin-manage-system-pgadmin-data:
