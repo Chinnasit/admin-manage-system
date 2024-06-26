@@ -10,8 +10,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
@@ -62,6 +62,7 @@ func initDatabase() *gorm.DB {
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable", host, user, password, dbName, port)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: &SqlLogger{}})
+
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -77,20 +78,20 @@ func initDatabase() *gorm.DB {
 }
 
 func StringPtr(s string) *string {
-    return &s
+	return &s
 }
 
 func UintPtr(i uint) *uint {
-    return &i
+	return &i
 }
 
 func CreateSampleUsers(db *gorm.DB) {
 	users := []entities.User{
 		{FirstName: StringPtr("John"), LastName: StringPtr("Doe"), Email: StringPtr("john.doe@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(1), Active: true},
-        {FirstName: StringPtr("Jane"), LastName: StringPtr("Doe"), Email: StringPtr("jane.doe@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(2), Active: true},
-        {FirstName: StringPtr("Bob"), LastName: StringPtr("Smith"), Email: StringPtr("bob.smith@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(3), Active: false},
-        {FirstName: StringPtr("Alice"), LastName: StringPtr("Johnson"), Email: StringPtr("alice.johnson@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(1), Active: true},
-        {FirstName: StringPtr("Tom"), LastName: StringPtr("Williams"), Email: StringPtr("tom.williams@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(2), Active: false},
+		{FirstName: StringPtr("Jane"), LastName: StringPtr("Doe"), Email: StringPtr("jane.doe@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(2), Active: true},
+		{FirstName: StringPtr("Bob"), LastName: StringPtr("Smith"), Email: StringPtr("bob.smith@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(3), Active: false},
+		{FirstName: StringPtr("Alice"), LastName: StringPtr("Johnson"), Email: StringPtr("alice.johnson@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(1), Active: true},
+		{FirstName: StringPtr("Tom"), LastName: StringPtr("Williams"), Email: StringPtr("tom.williams@example.com"), Password: StringPtr("abcd12345"), RoleId: UintPtr(2), Active: false},
 	}
 
 	for _, user := range users {
