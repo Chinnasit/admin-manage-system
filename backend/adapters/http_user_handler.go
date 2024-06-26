@@ -37,7 +37,20 @@ func (h *HttpUserHandler) GetUsers(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(users)
+	var usersList []entities.UserResponse
+	for _, user := range users {
+		userResponse := entities.UserResponse{
+			ID:        user.ID,
+			FullName:  *user.FirstName + " " + *user.LastName,
+			Email:     *user.Email,
+			CreatedAt: user.CreatedAt,
+			RoleId:    *user.RoleId,
+			Active:    user.Active,
+		}
+		usersList = append(usersList, userResponse)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(usersList)
 }
 
 func (h *HttpUserHandler) UpdateUserFull(c *fiber.Ctx) error {
